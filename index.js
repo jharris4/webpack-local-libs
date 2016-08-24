@@ -80,7 +80,8 @@ function getWebpackLocalLibMapper(localLibMap, options) {
   if (options.log === undefined) {
     options.log = false;
   }
-  var localLibData = options.enabled === true ? getLocalLibData(localLibMap, options.log === true) : false;
+  var log = options.log === true;
+  var localLibData = options.enabled === true ? getLocalLibData(localLibMap, log) : false;
 
   return {
     getOrAddToMap: function(existingMap, mapKey) {
@@ -94,7 +95,11 @@ function getWebpackLocalLibMapper(localLibMap, options) {
 
     getResolve: function(existingResolve) {
       if (localLibData) {
-        return getOrAddToMap(localLibData, existingResolve, 'alias');
+        var resolve = getOrAddToMap(localLibData, existingResolve, 'alias');
+        if (log) {
+          console.log('getResolve: ' + JSON.stringify(resolve));
+        }
+        return resolve;
       }
       else {
         return existingResolve ? existingResolve : {};
@@ -115,6 +120,9 @@ function getWebpackLocalLibMapper(localLibMap, options) {
         if (!existResolveLoader[resolveLoaderKey]) {
           existResolveLoader[resolveLoaderKey] = path.join(__dirname, resolveLoaderRootPath);
         }
+        if (log) {
+          console.log('getResolveLoader: ' + JSON.stringify(existResolveLoader));
+        }
         return existResolveLoader;
       }
       else {
@@ -127,7 +135,11 @@ function getWebpackLocalLibMapper(localLibMap, options) {
         if (!existingIncludes) {
           existingIncludes = [];
         }
-        return existingIncludes.concat(localLibData.localLibIncludes);
+        var includes = existingIncludes.concat(localLibData.localLibIncludes);
+        if (log) {
+          console.log('getIncludes: ' + JSON.stringify(includes));
+        }
+        return includes;
       }
       else {
         return existingIncludes ? existingIncludes : [];
