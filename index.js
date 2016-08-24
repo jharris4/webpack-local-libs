@@ -6,7 +6,7 @@ var sampleLocalLibMap = {
   'library-two': '../path/to/src/main-file.js'
 };
 
-function getLocalLibData(localLibMap, log) {
+function getLocalLibData(basePath, localLibMap, log) {
   log = !!log || false;
   var libKeys = Object.keys(localLibMap);
   if (log) {
@@ -20,7 +20,7 @@ function getLocalLibData(localLibMap, log) {
       stats = fs.statSync(localLibMap[libKey]);
       if (stats.isDirectory() || stats.isFile()) {
         localLibKeys.push(libKey);
-        libPathMap[libKey] = foundPath = path.resolve(__dirname, localLibMap[libKey]);
+        libPathMap[libKey] = foundPath = path.resolve(basePath, localLibMap[libKey]);
         if (stats.isDirectory()) {
           console.log('found local source directory: ' + libKey + ' -> ' + foundPath);
           localLibIncludes.push(foundPath);
@@ -70,7 +70,7 @@ function getOrAddToMap(localLibData, existingMap, mapKey) {
   return existingMap;
 }
 
-function getWebpackLocalLibMapper(localLibMap, options) {
+function getWebpackLocalLibMapper(basePath, localLibMap, options) {
   if (!options) {
     options = {};
   }
@@ -81,7 +81,7 @@ function getWebpackLocalLibMapper(localLibMap, options) {
     options.log = false;
   }
   var log = options.log === true;
-  var localLibData = options.enabled === true ? getLocalLibData(localLibMap, log) : false;
+  var localLibData = options.enabled === true ? getLocalLibData(basePath, localLibMap, log) : false;
 
   return {
     getOrAddToMap: function(existingMap, mapKey) {
@@ -118,7 +118,7 @@ function getWebpackLocalLibMapper(localLibMap, options) {
           existResolveLoader = {};
         }
         if (!existResolveLoader[resolveLoaderKey]) {
-          existResolveLoader[resolveLoaderKey] = path.join(__dirname, resolveLoaderRootPath);
+          existResolveLoader[resolveLoaderKey] = path.join(basePath, resolveLoaderRootPath);
         }
         if (log) {
           console.log('getResolveLoader: ' + JSON.stringify(existResolveLoader));

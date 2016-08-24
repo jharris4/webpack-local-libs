@@ -21,7 +21,7 @@ var localLibMap = {
   'libraryB': '../../anotherDir/mainFile.js'
 }
 
-var webpackLocalLibMapper = getWebpackLocalLibMapper(localLibMap, { enabled: true, log: true});
+var webpackLocalLibMapper = getWebpackLocalLibMapper(__dirname, localLibMap, { enabled: true, log: true});
 
 module.exports = {
   
