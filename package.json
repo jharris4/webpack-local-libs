@@ -1,0 +1,20 @@
+{
+  "name": "webpack-local-libs",
+  "version": "0.0.1",
+  "author": "Jon Harris @jharris4",
+  "description": "Utilities for getting webpack to resolve/alias packages from local paths relative to the current directory",
+  "dependencies": {
+  },
+  "license": "MIT",
+  "devDependencies": {
+  },
+  "engines": {
+    "node": ">=0.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jharris4/webpack-local-libs.git"
+  },
+  "homepage": "https://github.com/jharris4/webpack-local-libs",
+  "main": "index.js"
+}
