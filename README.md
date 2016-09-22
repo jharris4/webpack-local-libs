@@ -14,29 +14,42 @@ $ npm install webpack-local-libs
 ```javascript
 // webpack.config.js
 
-var getWebpackLocalLibMapper = require('webpack-local-libs');
+var getWebpackLocalLibEnhancer = require('webpack-local-libs');
 
 var localLibMap = {
-  'libraryA': '../someDir/someDir2',
-  'libraryB': '../../anotherDir/mainFile.js'
+  'js': {
+    'libraryA': '../someDir/someDir2',
+    'libraryB': '../../anotherDir/mainFile.js'
+  },
+  'css': {
+    'libraryC': '../assetDir'
+  }
 }
 
-var webpackLocalLibMapper = getWebpackLocalLibMapper(__dirname, localLibMap, { enabled: true, log: true});
+var localLibsEnabled = process.env.NODE_ENV !== 'production';
+
+var webpackLocalLibEnhancer = getWebpackLocalLibEnhancer(__dirname, localLibMap, localLibsEnabled);
+
+Note: for Webpack 2 support, you can use the following:
+
+var webpackLocalLibEnhancer = getWebpackLocalLibEnhancer(__dirname, localLibMap, localLibsEnabled, { webpack2: true});
 
 module.exports = {
   
-  // creates the resolve object for you:
+  // creates the resolve object for you (existing aliases are preserved unless they are overriden):
   // { alias: {
   //    libraryA: path.resolve(__dirname, '../someDir/someDir2'),
-  //    libraryB: path.resolve(__dirname, '../../anotherDir/mainFile.js')
+  //    libraryB: path.resolve(__dirname, '../../anotherDir/mainFile.js'),
+  //    libraryC: path.resolve(__dirname, '../assetDir')
   // } }
+  // Note that webpackLocalLibEnhancer.enhanceResolveRootAndAlias() exists for convenience
   
-  resolve: webpackLocalLibMapper.getResolve({}), // existing resolve argument can be ommitted
+  resolve: webpackLocalLibEnhancer.enhanceResolveAlias({}), // existing resolve argument can be ommitted
   
   // creates the resolveLoader object for you:
   // { root: path.join(__dirname, 'node_modules') };
   
-  resolveLoader: webpackLocalLibMapper.getResolveLoader({}), // existing resolveLoader argument can be ommitted
+  resolveLoader: webpackLocalLibEnhancer.enhanceResolveRoot({}), // existing resolveLoader argument can be ommitted
   
   // creates include entries for you (removes filenames if they exist at the end):
   // { include: [
@@ -50,7 +63,12 @@ module.exports = {
       {
         test: /\.js$/,
         loaders: ['babel'],
-        include: webpackLocalLibMapper.getIncludes([path.resolve(__dirname, 'src')])
+        include: webpackLocalLibEnhancer.enhanceIncludes('js', [path.resolve(__dirname, 'src')])
+      },
+      {
+        test: /\.css$/,
+        loader: ExtractTextPlugin.extract("style-loader", "css-loader"),
+        include: webpackLocalLibEnhancer.enhanceIncludes('css', [path.resolve(__dirname, 'src'), path.resolve(__dirname, 'node_modules')])
       }
     ]
   }

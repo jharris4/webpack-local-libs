@@ -1,151 +1,115 @@
 var path = require('path');
 var fs = require('fs');
 
-var sampleLocalLibMap = {
-  'library-name': '../path/to/src/root-directory',
-  'library-two': '../path/to/src/main-file.js'
-};
-
-function getLocalLibData(basePath, localLibMap, log) {
-  log = !!log || false;
-  var libKeys = Object.keys(localLibMap);
-  if (log) {
-    console.log('attempting to load local source files for: ' + libKeys);
-  }
-  var localLibKeys = [], localLibPathMap = {}, localLibIncludes = [];
-
-  var stats, foundPath, filePath;
-  libKeys.reduce(function(libPathMap, libKey) {
-    try {
-      stats = fs.statSync(localLibMap[libKey]);
-      if (stats.isDirectory() || stats.isFile()) {
-        localLibKeys.push(libKey);
-        libPathMap[libKey] = foundPath = path.resolve(basePath, localLibMap[libKey]);
-        if (stats.isDirectory()) {
-          console.log('found local source directory: ' + libKey + ' -> ' + foundPath);
-          localLibIncludes.push(foundPath);
-        }
-        else {
-          console.log('found local source file: ' + libKey + ' -> ' + foundPath);
-          localLibIncludes.push(path.resolve(foundPath, '..'));
-        }
-      }
-      else {
-        console.log('NOT FOUND local source files for: ' + libKey);
-      }
-    }
-    catch (error) {
-      console.log('NOT FOUND ERROR local source files for: ' + libKey);
-    }
-    return libPathMap;
-  }, localLibPathMap);
-
-  if (localLibIncludes.length > 0) {
-    return {
-      localLibKeys: localLibKeys,
-      localLibPathMap: localLibPathMap,
-      localLibIncludes: localLibIncludes
-    };
-  }
-  else {
-    return false;
-  }
-}
-
-function getOrAddToMap(localLibData, existingMap, mapKey) {
-  if (!existingMap) {
-    existingMap = {};
-  }
-  var mapToUse = existingMap;
-  if (mapKey) {
-    if (!existingMap[mapKey]) {
-      existingMap[mapKey] = {};
-    }
-    mapToUse = existingMap[mapKey];
-  }
-
-  localLibData.localLibKeys.forEach(function(localLibKey) {
-    mapToUse[localLibKey] = localLibData.localLibPathMap[localLibKey];
-  });
-  return existingMap;
-}
-
-function getWebpackLocalLibMapper(basePath, localLibMap, options) {
-  if (!options) {
+function getWebpackLocalLibEnhancer(basePath, localLibMap, enabled, options) {
+  if (options === undefined) {
     options = {};
   }
-  if (options.enabled === undefined) {
-    options.enabled = true;
+  if (options.defaultRootKey === undefined) {
+    if (options.webpack2 === true) {
+      options.defaultRootKey = 'modules';
+    }
+    else {
+      options.defaultRootKey = 'root';
+    }
   }
-  if (options.log === undefined) {
-    options.log = false;
+  if (options.rootFormatter === undefined) {
+    if (options.webpack2 === true) {
+      options.rootFormatter = function(root) { return [root]; }
+    }
+    else {
+      options.rootFormatter = function(root) { return root; }
+    }
   }
-  var log = options.log === true;
-  var localLibData = options.enabled === true ? getLocalLibData(basePath, localLibMap, log) : false;
+  if (options.defaultAliasKey === undefined) {
+    options.defaultAliasKey = 'alias';
+  }
+  var aliasToLocalPathMap = {};
+  var typeToLocalPathsMaps = {};
+
+  var allFound = true;
+
+  Object.keys(localLibMap).forEach(function(type) {
+    typeToLocalPathsMaps[type] = [];
+    Object.keys(localLibMap[type]).forEach(function(alias) {
+      try {
+        stats = fs.statSync(localLibMap[type][alias]);
+        if (stats.isDirectory() || stats.isFile()) {
+          var foundPath = path.resolve(basePath, localLibMap[type][alias]);
+          aliasToLocalPathMap[alias] = foundPath;
+          if (!stats.isDirectory()) {
+            foundPath = path.resolve(foundPath, '..');
+          }
+          typeToLocalPathsMaps[type].push(foundPath);
+        }
+        else {
+          allFound = false;
+        }
+      }
+      catch (error) {
+        allFound = false;
+      }
+    });
+  });
+
+  if (allFound === false) {
+    console.warn('*** warning, some local libs could not be found');
+  }
+
+  function enhanceResolveAlias(existingResolve, aliasKey) {
+    if (existingResolve === undefined) {
+      existingResolve = {};
+    }
+    if (enabled) {
+      if (aliasKey === undefined) {
+        aliasKey = options.defaultAliasKey;
+      }
+      if (existingResolve[aliasKey] === undefined) {
+        existingResolve[aliasKey] = {};
+      }
+      Object.keys(aliasToLocalPathMap).forEach(function(alias) {
+        existingResolve[aliasKey][alias] = aliasToLocalPathMap[alias];
+      });
+    }
+    return existingResolve;
+  }
+
+  function enhanceResolveRoot(existingResolve, rootKey, rootPath) {
+    if (existingResolve === undefined) {
+      existingResolve = {};
+    }
+    if (enabled) {
+      if (rootKey === undefined) {
+        rootKey = options.defaultRootKey;
+      }
+      if (rootPath === undefined) {
+        rootPath = 'node_modules';
+      }
+      existingResolve[rootKey] = options.rootFormatter(path.join(basePath, rootPath));
+    }
+    return existingResolve;
+  }
+
+  function enhanceResolveRootAndAlias(existingResolve, rootKey, rootPath, aliasKey) {
+    return enhanceResolveAlias(enhanceResolveRoot(existingResolve, rootKey, rootPath), aliasKey);
+  }
+
+  function enhanceIncludes(type, existingIncludes) {
+    if (existingIncludes === undefined) {
+      existingIncludes = [];
+    }
+    if (typeToLocalPathsMaps[type] !== undefined) {
+      existingIncludes = existingIncludes.concat(typeToLocalPathsMaps[type]);
+    }
+    return existingIncludes;
+  }
 
   return {
-    getOrAddToMap: function(existingMap, mapKey) {
-      if (localLibData) {
-        return getOrAddToMap(localLibData, existingMap, mapKey);
-      }
-      else {
-        return existingMap ? existingMap : {};
-      }
-    },
-
-    getResolve: function(existingResolve) {
-      if (localLibData) {
-        var resolve = getOrAddToMap(localLibData, existingResolve, 'alias');
-        if (log) {
-          console.log('getResolve: ' + JSON.stringify(resolve));
-        }
-        return resolve;
-      }
-      else {
-        return existingResolve ? existingResolve : {};
-      }
-    },
-
-    getResolveLoader: function(existResolveLoader, resolveLoaderRootPath, resolveLoaderKey) {
-      if (localLibData) {
-        if (!resolveLoaderRootPath) {
-          resolveLoaderRootPath = 'node_modules';
-        }
-        if (!resolveLoaderKey) {
-          resolveLoaderKey = 'root';
-        }
-        if (!existResolveLoader) {
-          existResolveLoader = {};
-        }
-        if (!existResolveLoader[resolveLoaderKey]) {
-          existResolveLoader[resolveLoaderKey] = path.join(basePath, resolveLoaderRootPath);
-        }
-        if (log) {
-          console.log('getResolveLoader: ' + JSON.stringify(existResolveLoader));
-        }
-        return existResolveLoader;
-      }
-      else {
-        return existResolveLoader ? existResolveLoader : {};
-      }
-    },
-
-    getIncludes: function(existingIncludes) {
-      if (localLibData) {
-        if (!existingIncludes) {
-          existingIncludes = [];
-        }
-        var includes = existingIncludes.concat(localLibData.localLibIncludes);
-        if (log) {
-          console.log('getIncludes: ' + JSON.stringify(includes));
-        }
-        return includes;
-      }
-      else {
-        return existingIncludes ? existingIncludes : [];
-      }
-    }
+    enhanceResolveAlias: enhanceResolveAlias,
+    enhanceResolveRoot: enhanceResolveRoot,
+    enhanceResolveRootAndAlias: enhanceResolveRootAndAlias,
+    enhanceIncludes: enhanceIncludes
   };
 }
 
-module.exports = getWebpackLocalLibMapper;
+module.exports = getWebpackLocalLibEnhancer;
